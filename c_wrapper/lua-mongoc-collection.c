@@ -592,6 +592,23 @@ lua_mongo_collection_delete_many(lua_State *L)
 }
 
 int
+lua_mongo_collection_find_indexes (lua_State *L)
+{
+    collection_t *collection;
+    mongoc_cursor_t *cursor = NULL;
+    bson_error_t error;
+
+    collection = (collection_t *)luaL_checkudata(L, 1, "lua_mongoc_collection");
+    cursor = mongoc_collection_find_indexes(collection->c_collection, &error);
+    if (mongoc_cursor_error(cursor, &error)) {
+        luaL_error(L, error.message);
+    }
+
+    lua_mongo_cursor_new(L, cursor);
+    return 1;
+}
+
+int
 lua_mongo_collection_destroy (lua_State *L)
 {
     collection_t *collection;

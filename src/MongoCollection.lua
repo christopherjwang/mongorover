@@ -177,4 +177,9 @@ MongoCollection.__index = MongoCollection
 		return createCursorIterator(self, cursor_t)
 	end
 
+	function MongoCollection:listIndexes()
+		local cursor_t = self.collection_t:collection_find_indexes()
+		return createCursorIterator(self, cursor_t)
+	end
+
 return MongoCollection
