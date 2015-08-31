@@ -1,7 +1,7 @@
 -- Set true to test luarocks installation, set to false if testing local development changes.
-_G['_MONGOROVER_RELEASE'] = false 
+_G['__MONGOROVER_TEST_ENVIRONMENT'] = false
 
-if _G["_MONGOROVER_RELEASE"] == false then
+if _G["__MONGOROVER_TEST_ENVIRONMENT"] == true then
 	print("****************************************************************************************************************")
 	print("In test/setReleaseType.lua, the _G['_MONGOROVER_RELEASE'] variable is set to false")
 	print("testing local debug build")
