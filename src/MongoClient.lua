@@ -19,7 +19,7 @@ limitations under the License.
 local importPrepend = ""
 if _G["__MONGOROVER_TEST_ENVIRONMENT"] then
 	-- Overwrite cpath to ensure only the locally created debug build is imported.
-	package.cpath = "../c_wrapper/build/?.dylib;../c_wrapper/build/?.so"
+	package.cpath = "../?.dylib;../?.so"
 else
 	importPrepend = "mongorover."
 end
