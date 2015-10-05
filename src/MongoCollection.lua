@@ -63,8 +63,8 @@ MongoCollection.__index = MongoCollection
 	-- @local
 	-- @tparam MongoCollection collection Needs to instantiate with a reference to the collection to ensure the collection is
 	-- not garbage collected before the cursor.
-	-- @tparam MongoCursor mongoCursor A cursor from the C wrapper.
-	function createCursorIterator (collection, mongoCursor)
+	-- @tparam MongoCursor mongo_cursor A cursor from the C wrapper.
+	function createCursorIterator (collection, mongo_cursor)
 		local cursor_t = mongoCursor
 		-- Table necessary to prevent MongoCollection from being garbage collected before cursor.
 		-- Table has to have relevant information in it, to prevent garbage collection.
