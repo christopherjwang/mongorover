@@ -16,6 +16,16 @@ limitations under the License.
 
 --]]
 
+local importPrepend = ""
+if _G["__MONGOROVER_TEST_ENVIRONMENT"] then
+	-- Overwrite cpath to ensure only the locally created debug build is imported.
+	package.cpath = "../?.dylib;../?.so"
+else
+	importPrepend = "mongorover."
+end
+local MongoModule = require("mongo_module")
+local luaBSONObjects = require(importPrepend .. "luaBSONObjects")
+
 --- Collection level utilities for Mongo.
 -- @module mongorover.MongoCollection
 
@@ -54,7 +64,7 @@ MongoCollection.__index = MongoCollection
 		query = query or {}
 		skip = skip or 0
 		limit = limit or 0
-		return self.collection_t:collection_count(query, skip, limit)
+		return self.collection_t:collection_count(luaBSONObjects, query, skip, limit)
 	end
 	
 	---
@@ -64,7 +74,7 @@ MongoCollection.__index = MongoCollection
 	-- @tparam MongoCollection collection Needs to instantiate with a reference to the collection to ensure the collection is
 	-- not garbage collected before the cursor.
 	-- @tparam MongoCursor mongo_cursor A cursor from the C wrapper.
-	function createCursorIterator (collection, mongo_cursor)
+	function createCursorIterator (collection, mongoCursor)
 		local cursor_t = mongoCursor
 		-- Table necessary to prevent MongoCollection from being garbage collected before cursor.
 		-- Table has to have relevant information in it, to prevent garbage collection.
@@ -72,7 +82,7 @@ MongoCollection.__index = MongoCollection
 		setmetatable(mongoCursorPointer, {__mode = "k"})
 		
 		return function ()
-                       return mongoCursorPointer["cursor_t"]:next()
+                       return mongoCursorPointer["cursor_t"]:next(luaBSONObjects)
                    end
 	end
 	
@@ -86,7 +96,7 @@ MongoCollection.__index = MongoCollection
 	function MongoCollection:find(query, fields)
 		query = query or {}
 		fields = fields or {}
-		local cursor_t = self.collection_t:collection_find(self, query, fields)
+		local cursor_t = self.collection_t:collection_find(luaBSONObjects, query, fields)
 		return createCursorIterator(self, cursor_t)
 	end
 	
@@ -97,7 +107,7 @@ MongoCollection.__index = MongoCollection
 	-- @tparam[opt] table fields Specifies the fields to return using projection operators. Default value returns all fields.
 	-- @treturn table First document found with the query provided.
 	function MongoCollection:find_one(query, fields)
-		return self.collection_t:collection_find_one(query, fields)
+		return self.collection_t:collection_find_one(luaBSONObjects, query, fields)
 	end
 	
 	---
@@ -109,7 +119,7 @@ MongoCollection.__index = MongoCollection
 	-- @return @{mongorover.resultObjects.UpdateResult}
 	function MongoCollection:update_one(filter, update, upsert)
 		upsert = upsert or false
-		local raw_result = self.collection_t:collection_update_one(filter, update, upsert, false)
+		local raw_result = self.collection_t:collection_update_one(luaBSONObjects, filter, update, upsert, false)
 		return UpdateResult.new(raw_result)
 	end
 	
@@ -122,7 +132,7 @@ MongoCollection.__index = MongoCollection
 	-- @return @{mongorover.resultObjects.UpdateResult}
 	function MongoCollection:update_many(filter, update, upsert)
 		upsert = upsert or false
-		local raw_result = self.collection_t:collection_update_many(filter, update, upsert, true)
+		local raw_result = self.collection_t:collection_update_many(luaBSONObjects, filter, update, upsert, true)
 		return UpdateResult.new(raw_result)
 	end
 	
@@ -133,7 +143,7 @@ MongoCollection.__index = MongoCollection
 	-- one will be added automatically.
 	-- @return @{mongorover.resultObjects.InsertOneResult}
 	function MongoCollection:insert_one(document)
-		return self.collection_t:collection_insert_one(document)
+		return self.collection_t:collection_insert_one(luaBSONObjects, document)
 	end
 	
 	---
@@ -146,7 +156,7 @@ MongoCollection.__index = MongoCollection
 	-- @return @{mongorover.resultObjects.InsertManyResult}
 	function MongoCollection:insert_many(documents, ordered)
 		ordered = ordered or true
-		return self.collection_t:collection_insert_many(documents, ordered)
+		return self.collection_t:collection_insert_many(luaBSONObjects, documents, ordered)
 	end
 	
 	---
@@ -155,7 +165,7 @@ MongoCollection.__index = MongoCollection
 	-- @tparam table selector  Specifies criteria using query operators. 
 	-- @return @{mongorover.resultObjects.DeleteResult}
 	function MongoCollection:delete_one(selector)
-		return self.collection_t:collection_delete_one(selector)
+		return self.collection_t:collection_delete_one(luaBSONObjects, selector)
 	end
 	
 	---
@@ -164,7 +174,7 @@ MongoCollection.__index = MongoCollection
 	-- @tparam table selector  Specifies criteria using query operators. 
 	-- @return @{mongorover.resultObjects.DeleteResult}
 	function MongoCollection:delete_many(selector)
-		return self.collection_t:collection_delete_many(selector)
+		return self.collection_t:collection_delete_many(luaBSONObjects, selector)
 	end
 	
 	---
@@ -173,7 +183,7 @@ MongoCollection.__index = MongoCollection
 	-- @tparam {table,...} aggregationPipeline A list of aggregation pipeline stages.
 	-- @treturn iterator An iterator with results.
 	function MongoCollection:aggregate(aggregationPipeline)
-		local cursor_t = self.collection_t:collection_aggregate(aggregationPipeline)
+		local cursor_t = self.collection_t:collection_aggregate(luaBSONObjects, aggregationPipeline)
 		return createCursorIterator(self, cursor_t)
 	end
 

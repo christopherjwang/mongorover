@@ -23,6 +23,7 @@ bool _add_lua_table_contents_to_bson_doc(lua_State *L,
                                          bson_t *bson_doc,
                                          int index,
                                          bool generate_id,
+                                         int absolute_luaBSONObjects_index,
                                          bson_error_t *error);
 
 bool _iterate_and_add_values_document_or_array_to_table(lua_State *L,
@@ -30,6 +31,7 @@ bool _iterate_and_add_values_document_or_array_to_table(lua_State *L,
                                                         bson_t *bson_doc,
                                                         bson_iter_t *iter,
                                                         bool is_table,
+                                                        int absolute_luaBSONObjects_index,
                                                         bson_error_t *error);
 
 /**
@@ -109,11 +111,12 @@ lua_array_length(lua_State *L, int index)
  */
 
 bool
-append_stack_value_to_bson_doc (lua_State *L,
-                                bson_t *bson_doc,
-                                const char *key,
-                                int index,
-                                bson_error_t *error)
+append_stack_value_to_bson_doc(lua_State *L,
+                               bson_t *bson_doc,
+                               const char *key,
+                               int index,
+                               int absolute_luaBSONObjects_index,
+                               bson_error_t *error)
 {
     int absolute_stack_index = _convert_to_absolute_stack_index(L, index);
     switch (lua_type(L, absolute_stack_index)) {
@@ -134,12 +137,11 @@ append_stack_value_to_bson_doc (lua_State *L,
             break;
         };
         case LUA_TTABLE: {
-
-            if (is_ObjectId(L, absolute_stack_index)) {
+            if (is_ObjectId(L, absolute_stack_index, absolute_luaBSONObjects_index)) {
                 const char *object_id_key;
                 bson_oid_t oid;
 
-                lua_getfield( L, absolute_stack_index, "getKey");
+                lua_getfield(L, absolute_stack_index, "getKey");
                 if (lua_isfunction(L, -1)) {
 
                     // Copy ObjectId on the stack as an input so we can use it as "self".
@@ -147,7 +149,7 @@ append_stack_value_to_bson_doc (lua_State *L,
                     if (lua_pcall(L, 1, 1, 0) != 0) {
                         strncpy (error->message,
                                  lua_tostring(L, -1),
-                                 sizeof (error->message));
+                                 sizeof(error->message));
                         // Maintain stack integrity.
                         lua_pop(L, 1);
                         return false;
@@ -158,26 +160,27 @@ append_stack_value_to_bson_doc (lua_State *L,
                     // Pop off the returned string.
                     lua_pop(L, 1);
 
-                    bson_oid_init_from_string (&oid, object_id_key);
+                    bson_oid_init_from_string(&oid, object_id_key);
                     bson_append_oid(bson_doc, key, -1, &oid);
 
                 } else {
                     luaL_error(L, "ObjectId does not have method getKey");
                 }
-            } else if (is_BSONNull(L, absolute_stack_index)) {
+            } else if (is_BSONNull(L, absolute_stack_index, absolute_luaBSONObjects_index)) {
                 bson_append_null(bson_doc, key, -1);
             } else {
-
                 bson_t subdocument;
                 if (lua_table_is_array(L, absolute_stack_index)) {
                     bson_append_array_begin(bson_doc, key, -1, &subdocument);
-                    if (!(lua_table_to_bson(L, &subdocument, absolute_stack_index, false, error))) {
+                    if (!(lua_table_to_bson(L, &subdocument, absolute_stack_index, false,
+                                            absolute_luaBSONObjects_index, error))) {
                         return false;
                     }
                     bson_append_array_end(bson_doc, &subdocument);
                 } else {
                     bson_append_document_begin(bson_doc, key, -1, &subdocument);
-                    if(!(lua_table_to_bson(L, &subdocument, absolute_stack_index, false, error))) {
+                    if (!(lua_table_to_bson(L, &subdocument, absolute_stack_index, false,
+                                            absolute_luaBSONObjects_index, error))) {
                         return false;
                     }
                     bson_append_document_end(bson_doc, &subdocument);
@@ -212,6 +215,7 @@ bool
 find_and_set_or_create_id(lua_State *L,
                           int index,
                           bson_t *bson_doc,
+                          int absolute_luaBSONObjects_index,
                           bson_error_t *error)
 {
     bson_oid_t oid;
@@ -225,9 +229,8 @@ find_and_set_or_create_id(lua_State *L,
 
     lua_pushstring(L, "_id");
     lua_gettable(L, absolute_stack_index);
-
     if (!lua_isnil(L, -1)) {
-        if (!(append_stack_value_to_bson_doc(L, bson_doc, "_id", -1, error))) {
+        if (!(append_stack_value_to_bson_doc(L, bson_doc, "_id", -1, absolute_luaBSONObjects_index, error))) {
             lua_pop(L, 1);
             return false;
         }
@@ -235,14 +238,12 @@ find_and_set_or_create_id(lua_State *L,
     } else {
         // Lingering nil value on the stack from the lua_gettable( ... ) call.
         lua_pop(L, 1);
-
-        bson_oid_init (&oid, NULL);
+        bson_oid_init(&oid, NULL);
         BSON_APPEND_OID (bson_doc, "_id", &oid);
         bson_oid_to_string(&oid, str);
-        if (!(generate_ObjectID(L, str, error))) {
+        if (!(generate_ObjectID(L, str, absolute_luaBSONObjects_index, error))) {
             return false;
         }
-
         lua_setfield(L, absolute_stack_index, "_id");
     }
 
@@ -267,6 +268,7 @@ lua_table_to_bson(lua_State *L,
                   bson_t *bson_doc,
                   int index,
                   bool _id_required,
+                  int absolute_luaBSONObjects_index,
                   bson_error_t *error)
 {
     if (!(bson_empty(bson_doc))) {
@@ -278,7 +280,8 @@ lua_table_to_bson(lua_State *L,
         return false;
     }
 
-    if (!(_add_lua_table_contents_to_bson_doc(L, bson_doc, index, _id_required, error))) {
+    if (!(_add_lua_table_contents_to_bson_doc(L, bson_doc, index, _id_required, absolute_luaBSONObjects_index, error)
+    )) {
         return false;
     }
 
@@ -303,11 +306,13 @@ add_lua_table_contents_to_bson_doc(lua_State *L,
                                    bson_t *bson_doc,
                                    int index,
                                    bool _id_required,
+                                   int absolute_luaBSONObjects_index,
                                    bson_error_t *error)
 {
     size_t offset;
 
-    if (!(_add_lua_table_contents_to_bson_doc(L, bson_doc, index, _id_required, error))) {
+    if (!(_add_lua_table_contents_to_bson_doc(L, bson_doc, index, _id_required,
+                                              absolute_luaBSONObjects_index, error))) {
         return false;
     }
 
@@ -347,6 +352,7 @@ _add_lua_table_contents_to_bson_doc(lua_State *L,
                                     bson_t *bson_doc,
                                     int index,
                                     bool _id_required,
+                                    int absolute_luaBSONObjects_index,
                                     bson_error_t *error)
 {
     // index: relative or absolute position of table on the stack being
@@ -358,13 +364,13 @@ _add_lua_table_contents_to_bson_doc(lua_State *L,
     bool is_array;
     int array_index;
 
-    if(!lua_istable(L, absolute_stack_index)) {
+    if (!lua_istable(L, absolute_stack_index)) {
         bson_snprintf(error->message, sizeof(error->message),
                       "value at index %d is not a table", index);
         return false;
     }
 
-    if (!(lua_checkstack (L, 3))) {
+    if (!(lua_checkstack(L, 3))) {
         strncpy(error->message,
                 "too many levels of embedded arrays, would cause stack "
                         "overflow in C API",
@@ -374,11 +380,10 @@ _add_lua_table_contents_to_bson_doc(lua_State *L,
     }
 
     if (_id_required) {
-        if (!(find_and_set_or_create_id(L, absolute_stack_index, bson_doc, error))) {
+        if (!(find_and_set_or_create_id(L, absolute_stack_index, bson_doc, absolute_luaBSONObjects_index, error))) {
             return false;
         }
     }
-
     is_array = lua_table_is_array(L, absolute_stack_index);
 
     lua_pushnil(L);
@@ -418,13 +423,13 @@ _add_lua_table_contents_to_bson_doc(lua_State *L,
                 if (_id_required) {
                     // _id was already appended to the beginning of the
                     // document, as per MongoDB specification.
-                    if (strcmp(key, "_id") == 0){
+                    if (strcmp(key, "_id") == 0) {
                         lua_pop(L, 1);
                         continue;
                     }
                 }
 
-                if (!(append_stack_value_to_bson_doc(L, bson_doc, key, -1, error))) {
+                if (!(append_stack_value_to_bson_doc(L, bson_doc, key, -1, absolute_luaBSONObjects_index, error))) {
                     lua_pop(L, 1);
                     return false;
                 }
@@ -459,7 +464,7 @@ bool
 bson_is_array(bson_iter_t iter)
 {
     int i;
-    for (i=0; bson_iter_next(&iter); i++) {
+    for (i = 0; bson_iter_next(&iter); i++) {
         const char *key = bson_iter_key(&iter);
         long ret = strtol(key, NULL, 10);
         if (ret != i) {
@@ -488,6 +493,7 @@ bool
 bson_subdocument_or_subarray_to_table(lua_State *L,
                                       bson_t *bson_doc,
                                       bson_iter_t *iter,
+                                      int absolute_luaBSONObjects_index,
                                       bson_error_t *error)
 {
 
@@ -495,12 +501,12 @@ bson_subdocument_or_subarray_to_table(lua_State *L,
     bool is_array;
     lua_newtable (L);
 
-    if (bson_iter_recurse (iter, &child)) {
+    if (bson_iter_recurse(iter, &child)) {
         is_array = bson_is_array(child);
 
         if (!(_iterate_and_add_values_document_or_array_to_table(L, -1, bson_doc,
-                                                           &child, !is_array,
-                                                           &error))) {
+                                                                 &child, !is_array,
+                                                                 absolute_luaBSONObjects_index, &error))) {
             return false;
         }
     }
@@ -531,17 +537,17 @@ _iterate_and_add_values_document_or_array_to_table(lua_State *L,
                                                    bson_t *bson_doc,
                                                    bson_iter_t *iter,
                                                    bool is_table,
+                                                   int absolute_luaBSONObjects_index,
                                                    bson_error_t *error)
 {
     int absolute_stack_index = _convert_to_absolute_stack_index(L, index);
-
     int i;
-    for (i=0; bson_iter_next(iter); i++) {
+    for (i = 0; bson_iter_next(iter); i++) {
         const char *key;
         const bson_value_t *value;
 
         key = bson_iter_key(iter);
-        value = bson_iter_value (iter);
+        value = bson_iter_value(iter);
         switch (value->value_type) {
             case BSON_TYPE_DOUBLE: {
                 lua_Number val = value->value.v_double;
@@ -568,16 +574,16 @@ _iterate_and_add_values_document_or_array_to_table(lua_State *L,
             };
             case BSON_TYPE_DOCUMENT: {
                 if (is_table) {
-                    if (!(bson_subdocument_or_subarray_to_table(L, bson_doc,
-                                                              iter, error))) {
+                    if (!(bson_subdocument_or_subarray_to_table(L, bson_doc, iter,
+                                                                absolute_luaBSONObjects_index, error))) {
                         lua_pop(L, 1);
                         return false;
                     }
 
                     lua_setfield(L, absolute_stack_index, key);
                 } else {
-                    if (!(bson_subdocument_or_subarray_to_table(L, bson_doc,
-                                                              iter, error))) {
+                    if (!(bson_subdocument_or_subarray_to_table(L, bson_doc, iter,
+                                                                absolute_luaBSONObjects_index, error))) {
                         lua_pop(L, 1);
                         return false;
                     }
@@ -586,15 +592,15 @@ _iterate_and_add_values_document_or_array_to_table(lua_State *L,
             };
             case BSON_TYPE_ARRAY: {
                 if (is_table) {
-                    if (!(bson_subdocument_or_subarray_to_table(L, bson_doc,
-                                                              iter, error))) {
+                    if (!(bson_subdocument_or_subarray_to_table(L, bson_doc, iter,
+                                                                absolute_luaBSONObjects_index, error))) {
                         lua_pop(L, 1);
                         return false;
                     }
                     lua_setfield(L, absolute_stack_index, key);
                 } else {
-                    if (!(bson_subdocument_or_subarray_to_table(L, bson_doc,
-                                                              iter, error))) {
+                    if (!(bson_subdocument_or_subarray_to_table(L, bson_doc, iter,
+                                                                absolute_luaBSONObjects_index, error))) {
                         lua_pop(L, 1);
                         return false;
                     }
@@ -610,9 +616,9 @@ _iterate_and_add_values_document_or_array_to_table(lua_State *L,
                 break;
             case BSON_TYPE_OID: {
                 char oid_str[25];
-                bson_oid_to_string (value->value.v_oid.bytes, oid_str);
+                bson_oid_to_string(value->value.v_oid.bytes, oid_str);
 
-                if (!(generate_ObjectID(L, oid_str, error))) {
+                if (!(generate_ObjectID(L, oid_str, absolute_luaBSONObjects_index, error))) {
                     return false;
                 }
 
@@ -625,7 +631,7 @@ _iterate_and_add_values_document_or_array_to_table(lua_State *L,
                     lua_setfield(L, absolute_stack_index, key);
                 } else {
                     lua_pushboolean(L, value->value.v_bool);
-                    lua_rawseti(L,absolute_stack_index,i + 1);
+                    lua_rawseti(L, absolute_stack_index, i + 1);
                 }
                 break;
             };
@@ -633,7 +639,7 @@ _iterate_and_add_values_document_or_array_to_table(lua_State *L,
                 luaL_error(L, "BSON_TYPE_DATE_TIME not supported yet");
                 break;
             case BSON_TYPE_NULL: {
-                generate_BSONNull(L);
+                generate_BSONNull(L, absolute_luaBSONObjects_index);
                 lua_setfield(L, absolute_stack_index, key);
                 break;
             };
@@ -713,17 +719,19 @@ _iterate_and_add_values_document_or_array_to_table(lua_State *L,
  */
 
 bool
-bson_document_or_array_to_table (lua_State *L,
-                                 bson_t *bson_doc,
-                                 bool is_table,
-                                 bson_error_t *error)
+bson_document_or_array_to_table(lua_State *L,
+                                bson_t *bson_doc,
+                                bool is_table,
+                                int absolute_luaBSONObjects_index,
+                                bson_error_t *error)
 {
     bson_iter_t iter;
     lua_newtable (L);
-    if (bson_iter_init (&iter, bson_doc)) {
+    if (bson_iter_init(&iter, bson_doc)) {
         if (!(_iterate_and_add_values_document_or_array_to_table(L, -1, bson_doc,
-                                                                &iter, is_table,
-                                                                error))) {
+                                                                 &iter, is_table,
+                                                                 absolute_luaBSONObjects_index,
+                                                                 error))) {
             return false;
         }
     }
