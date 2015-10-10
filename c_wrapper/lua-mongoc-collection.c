@@ -271,8 +271,8 @@ lua_mongo_collection_update(lua_State *L)
     collection = (collection_t *) luaL_checkudata(L, 1, "lua_mongoc_collection");
 
     if (!(lua_isnil(L, filter_index))) {
-        if (!(lua_table_to_bson(L, &filter, filter_index, false, absolute_luaBSONObjects_index, &error))) {
-            throw_error = true;
+        throw_error = !(lua_table_to_bson(L, &filter, filter_index, false, absolute_luaBSONObjects_index, &error));
+        if (throw_error) {
             goto DONE;
         }
     }
@@ -280,8 +280,8 @@ lua_mongo_collection_update(lua_State *L)
     if (lua_isnil(L, update_index)) {
         luaL_error(L, "update parameters must be included");
     } else {
-        if (!(lua_table_to_bson(L, &update, update_index, false, absolute_luaBSONObjects_index, &error))) {
-            throw_error = true;
+        throw_error = !(lua_table_to_bson(L, &update, update_index, false, absolute_luaBSONObjects_index, &error));
+        if (throw_error) {
             goto DONE;
         }
     }
@@ -315,8 +315,8 @@ lua_mongo_collection_update(lua_State *L)
         goto DONE;
     }
 
-    if (!(bson_document_or_array_to_table(L, &reply, true, absolute_luaBSONObjects_index, &error))) {
-        throw_error = true;
+    throw_error = !(bson_document_or_array_to_table(L, &reply, true, absolute_luaBSONObjects_index, &error));
+    if (throw_error) {
         goto DONE;
     }
 
@@ -555,13 +555,13 @@ lua_mongo_collection_delete_one(lua_State *L)
     mongoc_bulk_operation_remove_one(bulk_remove, &selector);
 
     ret = mongoc_bulk_operation_execute(bulk_remove, &reply, &error);
-    if (!(ret)) {
+    if (!ret) {
         throw_error = true;
         goto DONE;
     }
 
-    if (!(generate_DeleteResult(L, &reply, ret, absolute_luaBSONObjects_index, &error))) {
-        throw_error = true;
+    throw_error = !(generate_DeleteResult(L, &reply, ret, absolute_luaBSONObjects_index, &error));
+    if (throw_error) {
         goto DONE;
     }
 
@@ -595,8 +595,8 @@ lua_mongo_collection_delete_many(lua_State *L)
     collection = (collection_t *) luaL_checkudata(L, 1, "lua_mongoc_collection");
 
     if ((lua_istable(L, selector_index))) {
-        if (!(lua_table_to_bson(L, &selector, selector_index, false, absolute_luaBSONObjects_index, &error))) {
-            throw_error = true;
+        throw_error = !(lua_table_to_bson(L, &selector, selector_index, false, absolute_luaBSONObjects_index, &error));
+        if (throw_error) {
             goto DONE;
         }
     } else {
@@ -609,13 +609,13 @@ lua_mongo_collection_delete_many(lua_State *L)
     mongoc_bulk_operation_remove(bulk_remove, &selector);
 
     ret = mongoc_bulk_operation_execute(bulk_remove, &reply, &error);
-    if (!(ret)) {
+    if (!ret) {
         throw_error = true;
         goto DONE;
     }
 
-    if (!(generate_DeleteResult(L, &reply, ret, absolute_luaBSONObjects_index, &error))) {
-        throw_error = true;
+    throw_error = !(generate_DeleteResult(L, &reply, ret, absolute_luaBSONObjects_index, &error));
+    if (throw_error) {
         goto DONE;
     }
 

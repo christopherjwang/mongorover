@@ -62,9 +62,7 @@ lua_mongo_cursor_iterate(lua_State *L)
 
         return 1;
     } else {
-        if (mongoc_cursor_error(cursor->c_cursor, &error)) {
-            throw_error = true;
-        }
+        throw_error  = mongoc_cursor_error(cursor->c_cursor, &error);
 
         mongoc_cursor_destroy(cursor->c_cursor);
         cursor->c_cursor = NULL;

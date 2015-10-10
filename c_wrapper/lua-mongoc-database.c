@@ -141,7 +141,6 @@ lua_mongo_database_command_simple(lua_State *L)
     throw_error = !(append_stack_value_to_bson_doc(L, &command, command_name, value_index,
                                                    absolute_luaBSONObjects_index, &error));
     if (throw_error) {
-        throw_error = true;
         goto DONE;
     }
 
@@ -161,15 +160,14 @@ lua_mongo_database_command_simple(lua_State *L)
         }
     }
 
-    if (!(mongoc_database_command_simple(database->c_database, &command,
-                                         NULL,
-                                         &reply, &error))) {
-        throw_error = true;
+    throw_error = !(mongoc_database_command_simple(database->c_database, &command,
+                                                   NULL, &reply, &error));
+    if (throw_error) {
         goto DONE;
     }
 
-    if (!(bson_document_or_array_to_table(L, &reply, true, absolute_luaBSONObjects_index, &error))) {
-        throw_error = true;
+    throw_error = !(bson_document_or_array_to_table(L, &reply, true, absolute_luaBSONObjects_index, &error));
+    if (throw_error) {
         goto DONE;
     }
 
