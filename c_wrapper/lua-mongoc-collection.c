@@ -127,7 +127,11 @@ lua_mongo_collection_count(lua_State *L)
         luaL_error(L, error.message);
     }
 
+#if LUA_VERSION_NUM >= 503
+    lua_pushinteger(L, count);
+#else
     lua_pushnumber(L, count);
+#endif
 
     return 1;
 }
