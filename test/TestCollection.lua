@@ -27,6 +27,7 @@ local BSONDate = require("mongorover.luaBSONObjects.BSONDate")
 local InsertOneResult = require("mongorover.resultObjects.InsertOneResult")
 local InsertManyResult = require("mongorover.resultObjects.InsertManyResult")
 local UpdateResult = require("mongorover.resultObjects.UpdateResult")
+local DeleteResult = require("mongorover.resultObjects.DeleteResult")
 
 
 TestCollection = {}
@@ -235,6 +236,33 @@ setmetatable(TestCollection, {__index = BaseTest})
 		lu.assertEquals(result.modified_count, 0)
 		lu.assertTrue(ObjectId.isObjectId(result.upserted_id))
 	end
+
+  function TestClient:test_delete_one()
+    self.collection:insert_many({{x = 1}, {y = 1}, {z = 1}})
+    
+    local result = self.collection:delete_one({x = 1})
+    assert(DeleteResult.isDeleteResult(result))
+    assert(result.deleted_count == 1)
+    assert(result.acknowledged)
+    assert(self.collection:count() == 2)
+    
+    result = self.collection:delete_one({y = 1})
+    assert(DeleteResult.isDeleteResult(result))
+    assert(result.deleted_count == 1)
+    assert(result.acknowledged)
+    assert(self.collection:count() == 1)
+  end
+  
+  function TestClient:test_delete_many()
+    self.collection:insert_many({{x = 1}, {x =1}, {y = 1}, {z = 1}})
+    
+    local result = self.collection:delete_many({x = 1})
+    assert(DeleteResult.isDeleteResult(result))
+    assert(result.deleted_count == 2)
+    assert(result.acknowledged)
+    assert(self.collection:count() == 2)
+  end
+
 
 	function TestCollection:test_count()
 		assert(self.collection:count() == 0)
